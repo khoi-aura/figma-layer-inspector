@@ -1,0 +1,14 @@
+{
+  "name": "Layer Inspector",
+  "id": "0000000000000000000",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": ["figma"],
+  "ui": "ui.html",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

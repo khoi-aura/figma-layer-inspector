@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font: 12px/1.4 Inter, system-ui, sans-serif;
+        margin: 0;
+        padding: 12px;
+        color: var(--figma-color-text, #333);
+        background: var(--figma-color-bg, #fff);
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0 0 10px;
+        color: var(--figma-color-text-secondary, #666);
+      }
+      button {
+        font: inherit;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--figma-color-border, #ccc);
+        background: var(--figma-color-bg-brand, #0d99ff);
+        color: var(--figma-color-text-onbrand, #fff);
+        cursor: pointer;
+      }
+      button.secondary {
+        background: var(--figma-color-bg-secondary, #f0f0f0);
+        color: var(--figma-color-text, #333);
+        margin-left: 8px;
+      }
+      #error {
+        color: var(--figma-color-text-danger, #c00);
+        margin-bottom: 10px;
+        display: none;
+      }
+      #meta {
+        font-size: 11px;
+        margin-bottom: 8px;
+        color: var(--figma-color-text-secondary, #666);
+      }
+      #tree {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        white-space: pre;
+        overflow: auto;
+        max-height: 360px;
+        padding: 8px;
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        background: var(--figma-color-bg-secondary, #fafafa);
+      }
+      .row {
+        margin: 0;
+      }
+      .indent {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Layer inspector</h2>
+    <p>
+      Select any layer(s)—frames, groups, components, vectors, etc.—then refresh
+      to see the tree with visibility, lock state, and size when available.
+    </p>
+    <div>
+      <button id="scan" type="button">Refresh from selection</button>
+      <button id="close" class="secondary" type="button">Close</button>
+    </div>
+    <p id="error"></p>
+    <div id="meta"></div>
+    <div id="tree"></div>
+    <script>
+      const errorEl = document.getElementById('error')
+      const metaEl = document.getElementById('meta')
+      const treeEl = document.getElementById('tree')
+
+      function showError(text) {
+        errorEl.style.display = text ? 'block' : 'none'
+        errorEl.textContent = text || ''
+      }
+
+      function formatLayerLine(node) {
+        var parts = [node.name, '(' + node.type + ')']
+        if (typeof node.width === 'number' && typeof node.height === 'number') {
+          parts.push(node.width + '×' + node.height)
+        }
+        if (!node.visible) parts.push('hidden')
+        if (node.locked) parts.push('locked')
+        return parts.join(' · ')
+      }
+
+      function formatTree(node, depth) {
+        const pad = '  '.repeat(depth)
+        const line = pad + formatLayerLine(node)
+        const lines = [line]
+        if (node.children && node.children.length) {
+          for (const c of node.children) {
+            lines.push.apply(lines, formatTree(c, depth + 1))
+          }
+        }
+        return lines
+      }
+
+      function renderResult(payload) {
+        if (!payload.ok) {
+          showError(payload.message)
+          metaEl.textContent = ''
+          treeEl.textContent = ''
+          return
+        }
+        showError('')
+        var roots = payload.roots
+        metaEl.textContent =
+          roots.length === 1
+            ? '1 root: ' + roots[0].rootName + ' (' + roots[0].rootType + ')'
+            : roots.length + ' roots selected'
+        var blocks = []
+        for (var i = 0; i < roots.length; i++) {
+          if (roots.length > 1) {
+            blocks.push(
+              '── ' +
+                roots[i].rootName +
+                ' (' +
+                roots[i].rootType +
+                ') ' +
+                '──',
+            )
+          }
+          blocks.push.apply(blocks, formatTree(roots[i].layers, 0))
+          if (i < roots.length - 1) blocks.push('')
+        }
+        treeEl.textContent = blocks.join('\n')
+      }
+
+      document.getElementById('scan').onclick = function () {
+        showError('')
+        parent.postMessage({ pluginMessage: { type: 'scan' } }, '*')
+      }
+
+      document.getElementById('close').onclick = function () {
+        parent.postMessage({ pluginMessage: { type: 'close' } }, '*')
+      }
+
+      window.onmessage = function (event) {
+        var msg = event.data && event.data.pluginMessage
+        if (!msg) return
+        if (msg.type === 'scan-result') {
+          renderResult(msg.result)
+        }
+      }
+
+      parent.postMessage({ pluginMessage: { type: 'scan' } }, '*')
+    </script>
+  </body>
+</html>
