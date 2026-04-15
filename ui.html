@@ -57,6 +57,32 @@
         border-radius: 6px;
         background: var(--figma-color-bg-secondary, #fafafa);
       }
+      #struct {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        white-space: pre;
+        overflow: auto;
+        max-height: 360px;
+        padding: 8px;
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        background: var(--figma-color-bg-secondary, #fafafa);
+        display: none;
+      }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        margin-bottom: 8px;
+      }
+      .tab-btn {
+        background: var(--figma-color-bg-secondary, #f0f0f0);
+        color: var(--figma-color-text, #333);
+      }
+      .tab-btn.active {
+        background: var(--figma-color-bg-brand, #0d99ff);
+        color: var(--figma-color-text-onbrand, #fff);
+      }
       .row {
         margin: 0;
       }
@@ -78,11 +104,27 @@
     </div>
     <p id="error"></p>
     <div id="meta"></div>
+    <div class="tabs">
+      <button id="tab-inspector" class="tab-btn active" type="button">Inspector</button>
+      <button id="tab-struct" class="tab-btn" type="button">Struct</button>
+    </div>
     <div id="tree"></div>
+    <div id="struct"></div>
     <script>
       const errorEl = document.getElementById('error')
       const metaEl = document.getElementById('meta')
       const treeEl = document.getElementById('tree')
+      const structEl = document.getElementById('struct')
+      const tabInspectorEl = document.getElementById('tab-inspector')
+      const tabStructEl = document.getElementById('tab-struct')
+
+      function setTab(tabName) {
+        var inspector = tabName === 'inspector'
+        treeEl.style.display = inspector ? 'block' : 'none'
+        structEl.style.display = inspector ? 'none' : 'block'
+        tabInspectorEl.classList.toggle('active', inspector)
+        tabStructEl.classList.toggle('active', !inspector)
+      }
 
       function showError(text) {
         errorEl.style.display = text ? 'block' : 'none'
@@ -135,9 +177,10 @@
           showError(payload.message)
           metaEl.textContent = ''
           treeEl.textContent = ''
+          structEl.textContent = ''
           return
         }
-        showError('')
+        showError(payload.notice || '')
         var roots = payload.roots
         metaEl.textContent =
           roots.length === 1
@@ -159,6 +202,12 @@
           if (i < roots.length - 1) blocks.push('')
         }
         treeEl.textContent = blocks.join('\n')
+        if (payload.struct) {
+          structEl.textContent = JSON.stringify(payload.struct, null, 2)
+        } else {
+          structEl.textContent =
+            '// Select a frame/component-like root with width and height to generate a struct.'
+        }
       }
 
       document.getElementById('scan').onclick = function () {
@@ -168,6 +217,12 @@
 
       document.getElementById('close').onclick = function () {
         parent.postMessage({ pluginMessage: { type: 'close' } }, '*')
+      }
+      tabInspectorEl.onclick = function () {
+        setTab('inspector')
+      }
+      tabStructEl.onclick = function () {
+        setTab('struct')
       }
 
       window.onmessage = function (event) {
@@ -179,6 +234,7 @@
       }
 
       parent.postMessage({ pluginMessage: { type: 'scan' } }, '*')
+      setTab('inspector')
     </script>
   </body>
 </html>

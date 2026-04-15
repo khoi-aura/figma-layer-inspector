@@ -27,6 +27,131 @@ type LayerNode = {
   children?: LayerNode[]
 }
 
+type SpecImage = {
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  default: string
+}
+
+type SpecText = {
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  default: string
+  maxLength: number
+  fontName: string
+  fontSize: number | 'mixed'
+}
+
+type FrontSpec = {
+  images: SpecImage[]
+  text: SpecText[]
+}
+
+type TemplateSpec = {
+  height: number
+  width: number
+  front: FrontSpec
+}
+
+function hasImageFill(node: SceneNode): boolean {
+  if (!('fills' in node)) return false
+  const fillsValue = node.fills
+  if (fillsValue === figma.mixed || !Array.isArray(fillsValue)) return false
+  return fillsValue.some((paint) => paint.type === 'IMAGE')
+}
+
+function toFontLabel(font: FontName | PluginAPI['mixed']): string {
+  if (font === figma.mixed) return 'mixed'
+  return `${font.family}-${font.style}`.replace(/\s+/g, '')
+}
+
+function makeImageDefault(width: number, height: number): string {
+  const safeW = Math.max(1, Math.round(width))
+  const safeH = Math.max(1, Math.round(height))
+  return `https://placehold.net/shape-${safeW}x${safeH}.png`
+}
+
+function traverseForSpec(
+  node: SceneNode,
+  offsetX: number,
+  offsetY: number,
+  front: FrontSpec,
+): void {
+  let nextOffsetX = offsetX
+  let nextOffsetY = offsetY
+  if ('x' in node && 'y' in node) {
+    const layout = node as LayoutMixin
+    nextOffsetX += layout.x
+    nextOffsetY += layout.y
+  }
+
+  if ('width' in node && 'height' in node) {
+    const layout = node as LayoutMixin
+    const width = roundCoord(layout.width)
+    const height = roundCoord(layout.height)
+    const x = roundCoord(nextOffsetX)
+    const y = roundCoord(nextOffsetY)
+
+    if (hasImageFill(node)) {
+      front.images.push({
+        name: node.name,
+        x,
+        y,
+        width,
+        height,
+        default: makeImageDefault(width, height),
+      })
+    }
+
+    if (node.type === 'TEXT') {
+      front.text.push({
+        name: node.name,
+        x,
+        y,
+        width,
+        height,
+        default: node.characters,
+        maxLength: node.characters.length,
+        fontName: toFontLabel(node.fontName),
+        fontSize:
+          node.fontSize === figma.mixed ? 'mixed' : roundCoord(node.fontSize),
+      })
+    }
+  }
+
+  if ('children' in node) {
+    const parent = node as ChildrenMixin
+    for (const child of parent.children) {
+      traverseForSpec(child, nextOffsetX, nextOffsetY, front)
+    }
+  }
+}
+
+function buildTemplateSpec(root: SceneNode): TemplateSpec | null {
+  if (!('width' in root && 'height' in root)) return null
+  const layout = root as LayoutMixin
+  const front: FrontSpec = { images: [], text: [] }
+  if ('children' in root) {
+    const parent = root as ChildrenMixin
+    for (const child of parent.children) {
+      traverseForSpec(child, 0, 0, front)
+    }
+  } else {
+    traverseForSpec(root, 0, 0, front)
+  }
+  return {
+    height: roundCoord(layout.height),
+    width: roundCoord(layout.width),
+    front,
+  }
+}
+
 function sceneNodeToLayer(node: SceneNode): LayerNode {
   const row: LayerNode = {
     name: node.name,
@@ -69,6 +194,8 @@ function sceneNodeToLayer(node: SceneNode): LayerNode {
 
 type ScanOk = {
   ok: true
+  notice?: string
+  struct?: TemplateSpec | null
   roots: Array<{
     rootName: string
     rootType: string
@@ -90,7 +217,13 @@ function buildLayerTree(selection: readonly SceneNode[]): ScanOk | ScanErr {
     rootType: node.type,
     layers: sceneNodeToLayer(node),
   }))
-  return { ok: true, roots }
+  const struct =
+    selection.length >= 1 ? buildTemplateSpec(selection[0]) : null
+  const notice =
+    selection.length > 1
+      ? 'Struct tab uses the first selected layer as the root.'
+      : undefined
+  return { ok: true, roots, struct, notice }
 }
 
 figma.ui.onmessage = (msg: { type: string }) => {
