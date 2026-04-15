@@ -55,6 +55,7 @@ type SpecText = {
   maxLength: number
   fontName: string
   fontSize: number | 'mixed'
+  align: 'leading' | 'center' | 'trailing'
 }
 
 type FrontSpec = {
@@ -83,7 +84,15 @@ function toFontLabel(font: FontName | PluginAPI['mixed']): string {
 function makeImageDefault(width: number, height: number): string {
   const safeW = Math.max(1, Math.round(width))
   const safeH = Math.max(1, Math.round(height))
-  return `https://placehold.net/shape-${safeW}x${safeH}.png`
+  return `https://placehold.co/${safeW}x${safeH}/666666/FFFFFF.png`
+}
+
+function toSpecTextAlign(
+  align: TextNode['textAlignHorizontal'] | PluginAPI['mixed'],
+): 'leading' | 'center' | 'trailing' {
+  if (align === 'CENTER') return 'center'
+  if (align === 'RIGHT') return 'trailing'
+  return 'leading'
 }
 
 function traverseForSpec(
@@ -130,6 +139,7 @@ function traverseForSpec(
         fontName: toFontLabel(node.fontName),
         fontSize:
           node.fontSize === figma.mixed ? 'mixed' : roundCoord(node.fontSize),
+        align: toSpecTextAlign(node.textAlignHorizontal),
       })
     }
   }
