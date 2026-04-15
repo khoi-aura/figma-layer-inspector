@@ -5,11 +5,18 @@
 
 figma.showUI(__html__, { width: 460, height: 560, themeColors: true })
 
+function roundCoord(n: number): number {
+  return Math.round(n * 1000) / 1000
+}
+
 type LayerNode = {
   name: string
   type: string
   visible: boolean
   locked: boolean
+  /** Position of this node's origin relative to the parent's top-left */
+  x?: number
+  y?: number
   /** Pixel size when the node exposes layout dimensions */
   width?: number
   height?: number
@@ -23,10 +30,15 @@ function sceneNodeToLayer(node: SceneNode): LayerNode {
     visible: node.visible,
     locked: node.locked,
   }
+  if ('x' in node && 'y' in node) {
+    const box = node as LayoutMixin
+    row.x = roundCoord(box.x)
+    row.y = roundCoord(box.y)
+  }
   if ('width' in node && 'height' in node) {
     const box = node as LayoutMixin
-    row.width = Math.round(box.width * 1000) / 1000
-    row.height = Math.round(box.height * 1000) / 1000
+    row.width = roundCoord(box.width)
+    row.height = roundCoord(box.height)
   }
   if ('children' in node) {
     const parent = node as ChildrenMixin

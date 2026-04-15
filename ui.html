@@ -69,7 +69,8 @@
     <h2>Layer inspector</h2>
     <p>
       Select any layer(s)—frames, groups, components, vectors, etc.—then refresh
-      to see the tree with visibility, lock state, and size when available.
+      to see the tree. Position (x, y) is relative to each layer’s parent’s top-left;
+      size and visibility/lock are included when available.
     </p>
     <div>
       <button id="scan" type="button">Refresh from selection</button>
@@ -90,6 +91,9 @@
 
       function formatLayerLine(node) {
         var parts = [node.name, '(' + node.type + ')']
+        if (typeof node.x === 'number' && typeof node.y === 'number') {
+          parts.push('(' + node.x + ', ' + node.y + ')')
+        }
         if (typeof node.width === 'number' && typeof node.height === 'number') {
           parts.push(node.width + '×' + node.height)
         }
