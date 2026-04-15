@@ -3,7 +3,16 @@
  * See https://developers.figma.com/docs/plugins/plugin-quickstart-guide/
  */
 
-figma.showUI(__html__, { width: 460, height: 560, themeColors: true })
+const INITIAL_WIDTH = 460
+const INITIAL_HEIGHT = 560
+const MIN_WIDTH = 360
+const MIN_HEIGHT = 320
+
+figma.showUI(__html__, {
+  width: INITIAL_WIDTH,
+  height: INITIAL_HEIGHT,
+  themeColors: true,
+})
 
 function roundCoord(n: number): number {
   return Math.round(n * 1000) / 1000
@@ -226,10 +235,21 @@ function buildLayerTree(selection: readonly SceneNode[]): ScanOk | ScanErr {
   return { ok: true, roots, struct, notice }
 }
 
-figma.ui.onmessage = (msg: { type: string }) => {
+figma.ui.onmessage = (
+  msg:
+    | { type: 'scan' }
+    | { type: 'close' }
+    | { type: 'resize-ui'; width: number; height: number },
+) => {
   if (msg.type === 'scan') {
     const result = buildLayerTree(figma.currentPage.selection)
     figma.ui.postMessage({ type: 'scan-result', result })
+    return
+  }
+  if (msg.type === 'resize-ui') {
+    const width = Math.max(MIN_WIDTH, Math.round(msg.width))
+    const height = Math.max(MIN_HEIGHT, Math.round(msg.height))
+    figma.ui.resize(width, height)
     return
   }
   if (msg.type === 'close') {

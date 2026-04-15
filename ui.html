@@ -9,9 +9,15 @@
       body {
         font: 12px/1.4 Inter, system-ui, sans-serif;
         margin: 0;
-        padding: 12px;
+        padding: 12px 12px 16px 12px;
         color: var(--figma-color-text, #333);
         background: var(--figma-color-bg, #fff);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      body.is-resizing {
+        user-select: none;
       }
       h2 {
         font-size: 13px;
@@ -49,9 +55,12 @@
       #tree {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
-        white-space: pre;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         overflow: auto;
-        max-height: 360px;
+        min-height: 0;
+        flex: 1 1 auto;
         padding: 8px;
         border: 1px solid var(--figma-color-border, #e5e5e5);
         border-radius: 6px;
@@ -60,9 +69,12 @@
       #struct {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
-        white-space: pre;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         overflow: auto;
-        max-height: 360px;
+        min-height: 0;
+        flex: 1 1 auto;
         padding: 8px;
         border: 1px solid var(--figma-color-border, #e5e5e5);
         border-radius: 6px;
@@ -83,11 +95,47 @@
         background: var(--figma-color-bg-brand, #0d99ff);
         color: var(--figma-color-text-onbrand, #fff);
       }
+      .panel-actions {
+        margin-bottom: 8px;
+      }
+      #copy-inspector,
+      #copy-struct {
+        background: var(--figma-color-bg-secondary, #f0f0f0);
+        color: var(--figma-color-text, #333);
+      }
+      #copy-struct {
+        display: none;
+      }
       .row {
         margin: 0;
       }
       .indent {
         display: inline-block;
+      }
+      .resize-handle {
+        position: fixed;
+        z-index: 20;
+      }
+      #resize-right {
+        right: 0;
+        top: 0;
+        width: 8px;
+        height: 100%;
+        cursor: ew-resize;
+      }
+      #resize-bottom {
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 8px;
+        cursor: ns-resize;
+      }
+      #resize-corner {
+        right: 0;
+        bottom: 0;
+        width: 14px;
+        height: 14px;
+        cursor: nwse-resize;
       }
     </style>
   </head>
@@ -108,8 +156,19 @@
       <button id="tab-inspector" class="tab-btn active" type="button">Inspector</button>
       <button id="tab-struct" class="tab-btn" type="button">Struct</button>
     </div>
+    <div class="panel-actions">
+      <button id="copy-inspector" type="button">Copy Inspector</button>
+      <button id="copy-struct" type="button">Copy Struct</button>
+    </div>
     <div id="tree"></div>
     <div id="struct"></div>
+    <div id="resize-right" class="resize-handle" title="Resize width"></div>
+    <div id="resize-bottom" class="resize-handle" title="Resize height"></div>
+    <div
+      id="resize-corner"
+      class="resize-handle"
+      title="Resize width and height"
+    ></div>
     <script>
       const errorEl = document.getElementById('error')
       const metaEl = document.getElementById('meta')
@@ -117,6 +176,10 @@
       const structEl = document.getElementById('struct')
       const tabInspectorEl = document.getElementById('tab-inspector')
       const tabStructEl = document.getElementById('tab-struct')
+      const copyInspectorEl = document.getElementById('copy-inspector')
+      const copyStructEl = document.getElementById('copy-struct')
+      const MIN_WIDTH = 360
+      const MIN_HEIGHT = 320
 
       function setTab(tabName) {
         var inspector = tabName === 'inspector'
@@ -124,6 +187,8 @@
         structEl.style.display = inspector ? 'none' : 'block'
         tabInspectorEl.classList.toggle('active', inspector)
         tabStructEl.classList.toggle('active', !inspector)
+        copyInspectorEl.style.display = inspector ? 'inline-block' : 'none'
+        copyStructEl.style.display = inspector ? 'none' : 'inline-block'
       }
 
       function showError(text) {
@@ -223,6 +288,106 @@
       }
       tabStructEl.onclick = function () {
         setTab('struct')
+      }
+
+      function copyToClipboard(text, successLabel, buttonEl) {
+        if (!text) return
+        function onCopySuccess() {
+          var oldText = buttonEl.textContent
+          buttonEl.textContent = successLabel
+          setTimeout(function () {
+            buttonEl.textContent = oldText
+          }, 900)
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () {
+              onCopySuccess()
+            },
+            function () {
+              showError('Clipboard access failed. Please copy manually.')
+            },
+          )
+          return
+        }
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        try {
+          const ok = document.execCommand('copy')
+          if (ok) onCopySuccess()
+          else showError('Clipboard access failed. Please copy manually.')
+        } catch (_err) {
+          showError('Clipboard access failed. Please copy manually.')
+        } finally {
+          document.body.removeChild(textarea)
+        }
+      }
+
+      copyInspectorEl.onclick = function () {
+        copyToClipboard(treeEl.textContent || '', 'Copied', copyInspectorEl)
+      }
+      copyStructEl.onclick = function () {
+        copyToClipboard(structEl.textContent || '', 'Copied', copyStructEl)
+      }
+
+      function beginResize(mode, startEvent) {
+        startEvent.preventDefault()
+        const startMouseX = startEvent.clientX
+        const startMouseY = startEvent.clientY
+        const startWidth = window.innerWidth
+        const startHeight = window.innerHeight
+        document.body.classList.add('is-resizing')
+
+        function onMouseMove(event) {
+          let nextWidth = startWidth
+          let nextHeight = startHeight
+          if (mode === 'right' || mode === 'corner') {
+            nextWidth = Math.max(
+              MIN_WIDTH,
+              startWidth + (event.clientX - startMouseX),
+            )
+          }
+          if (mode === 'bottom' || mode === 'corner') {
+            nextHeight = Math.max(
+              MIN_HEIGHT,
+              startHeight + (event.clientY - startMouseY),
+            )
+          }
+          parent.postMessage(
+            {
+              pluginMessage: {
+                type: 'resize-ui',
+                width: nextWidth,
+                height: nextHeight,
+              },
+            },
+            '*',
+          )
+        }
+
+        function onMouseUp() {
+          document.body.classList.remove('is-resizing')
+          window.removeEventListener('mousemove', onMouseMove)
+          window.removeEventListener('mouseup', onMouseUp)
+        }
+
+        window.addEventListener('mousemove', onMouseMove)
+        window.addEventListener('mouseup', onMouseUp)
+      }
+
+      document.getElementById('resize-right').onmousedown = function (event) {
+        beginResize('right', event)
+      }
+      document.getElementById('resize-bottom').onmousedown = function (event) {
+        beginResize('bottom', event)
+      }
+      document.getElementById('resize-corner').onmousedown = function (event) {
+        beginResize('corner', event)
       }
 
       window.onmessage = function (event) {
