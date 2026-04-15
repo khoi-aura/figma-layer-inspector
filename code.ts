@@ -20,6 +20,10 @@ type LayerNode = {
   /** Pixel size when the node exposes layout dimensions */
   width?: number
   height?: number
+  /** Text details when this node is a text layer */
+  text?: string
+  fontName?: string
+  fontSize?: number | 'mixed'
   children?: LayerNode[]
 }
 
@@ -39,6 +43,19 @@ function sceneNodeToLayer(node: SceneNode): LayerNode {
     const box = node as LayoutMixin
     row.width = roundCoord(box.width)
     row.height = roundCoord(box.height)
+  }
+  if (node.type === 'TEXT') {
+    row.text = node.characters
+    if (node.fontName !== figma.mixed) {
+      row.fontName = `${node.fontName.family} ${node.fontName.style}`
+    } else {
+      row.fontName = 'mixed'
+    }
+    if (node.fontSize !== figma.mixed) {
+      row.fontSize = roundCoord(node.fontSize)
+    } else {
+      row.fontSize = 'mixed'
+    }
   }
   if ('children' in node) {
     const parent = node as ChildrenMixin

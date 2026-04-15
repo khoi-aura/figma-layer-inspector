@@ -70,7 +70,7 @@
     <p>
       Select any layer(s)—frames, groups, components, vectors, etc.—then refresh
       to see the tree. Position (x, y) is relative to each layer’s parent’s top-left;
-      size and visibility/lock are included when available.
+      size, visibility/lock, and text details are included when available.
     </p>
     <div>
       <button id="scan" type="button">Refresh from selection</button>
@@ -99,6 +99,22 @@
         }
         if (!node.visible) parts.push('hidden')
         if (node.locked) parts.push('locked')
+        if (typeof node.fontName === 'string') {
+          var fontSizePart =
+            typeof node.fontSize === 'number'
+              ? node.fontSize
+              : node.fontSize === 'mixed'
+                ? 'mixed'
+                : '?'
+          parts.push('font=' + node.fontName + ' ' + fontSizePart)
+        }
+        if (typeof node.text === 'string') {
+          var oneLineText = node.text.replace(/\s+/g, ' ').trim()
+          if (oneLineText.length > 70) {
+            oneLineText = oneLineText.slice(0, 67) + '...'
+          }
+          parts.push('text="' + oneLineText + '"')
+        }
         return parts.join(' · ')
       }
 
