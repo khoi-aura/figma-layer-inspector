@@ -47,6 +47,41 @@
         margin-bottom: 10px;
         display: none;
       }
+      #export-log-wrap {
+        margin-bottom: 10px;
+        flex: 0 0 auto;
+        max-height: 160px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        width: 100%;
+      }
+      .export-log-heading {
+        font-size: 11px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--figma-color-text, #333);
+      }
+      #export-log {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        margin: 0;
+        padding: 8px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        overflow: auto;
+        max-height: 132px;
+        border: 1px solid var(--figma-color-border, #e5e5e5);
+        border-radius: 6px;
+        background: var(--figma-color-bg-secondary, #fafafa);
+        color: var(--figma-color-text, #333);
+      }
+      #export-log.is-error {
+        border-color: var(--figma-color-border-danger, #e8a0a0);
+        color: var(--figma-color-text-danger, #a30);
+      }
       #meta {
         font-size: 11px;
         margin-bottom: 8px;
@@ -145,6 +180,9 @@
       Select any layer(s)—frames, groups, components, vectors, etc.—then refresh
       to see the tree. Position (x, y) is relative to each layer’s parent’s top-left;
       size, visibility/lock, and text details are included when available.
+      The Struct tab exports Aura Post Card JSON: select a root container that
+      has a visible child named <code>front</code> (required). Optional children:
+      <code>back</code>, <code>inside</code>, <code>colorOptions</code>.
     </p>
     <div>
       <button id="scan" type="button">Refresh from selection</button>
@@ -152,6 +190,10 @@
     </div>
     <p id="error"></p>
     <div id="meta"></div>
+    <div id="export-log-wrap">
+      <div class="export-log-heading">Export validation log</div>
+      <pre id="export-log"></pre>
+    </div>
     <div class="tabs">
       <button id="tab-inspector" class="tab-btn active" type="button">Inspector</button>
       <button id="tab-struct" class="tab-btn" type="button">Struct</button>
@@ -171,6 +213,8 @@
     ></div>
     <script>
       const errorEl = document.getElementById('error')
+      const exportLogEl = document.getElementById('export-log')
+      const exportLogWrapEl = document.getElementById('export-log-wrap')
       const metaEl = document.getElementById('meta')
       const treeEl = document.getElementById('tree')
       const structEl = document.getElementById('struct')
@@ -194,6 +238,36 @@
       function showError(text) {
         errorEl.style.display = text ? 'block' : 'none'
         errorEl.textContent = text || ''
+      }
+
+      function renderExportLog(payload) {
+        if (!payload.ok) {
+          exportLogEl.textContent = payload.message
+          exportLogEl.classList.add('is-error')
+          exportLogWrapEl.style.display = 'flex'
+          return
+        }
+        var exportErrs = payload.exportErrors || []
+        exportLogEl.classList.toggle('is-error', exportErrs.length > 0)
+        if (exportErrs.length) {
+          exportLogEl.textContent = exportErrs
+            .map(function (e, i) {
+              return (
+                String(i + 1) +
+                '. ' +
+                e.path +
+                '\n   ' +
+                e.message
+              )
+            })
+            .join('\n\n')
+        } else if (payload.struct) {
+          exportLogEl.textContent = 'No errors. Aura Post Card JSON is valid.'
+        } else {
+          exportLogEl.textContent =
+            'No schema validation errors. Select a valid card root to produce JSON (see Struct tab hint).'
+        }
+        exportLogWrapEl.style.display = 'flex'
       }
 
       function formatLayerLine(node) {
@@ -240,17 +314,36 @@
       function renderResult(payload) {
         if (!payload.ok) {
           showError(payload.message)
+          renderExportLog(payload)
           metaEl.textContent = ''
           treeEl.textContent = ''
           structEl.textContent = ''
           return
         }
-        showError(payload.notice || '')
+        var exportErrs = payload.exportErrors || []
+        if (exportErrs.length) {
+          showError(
+            exportErrs
+              .map(function (e) {
+                return e.path + ': ' + e.message
+              })
+              .join('\n'),
+          )
+        } else {
+          showError('')
+        }
         var roots = payload.roots
-        metaEl.textContent =
+        var metaParts = []
+        metaParts.push(
           roots.length === 1
             ? '1 root: ' + roots[0].rootName + ' (' + roots[0].rootType + ')'
-            : roots.length + ' roots selected'
+            : roots.length + ' roots selected',
+        )
+        if (payload.notice) metaParts.push(payload.notice)
+        if (exportErrs.length)
+          metaParts.push('Export: ' + exportErrs.length + ' validation issue(s)')
+        else if (payload.struct) metaParts.push('Export: valid Aura Post Card JSON')
+        metaEl.textContent = metaParts.join(' · ')
         var blocks = []
         for (var i = 0; i < roots.length; i++) {
           if (roots.length > 1) {
@@ -269,10 +362,19 @@
         treeEl.textContent = blocks.join('\n')
         if (payload.struct) {
           structEl.textContent = JSON.stringify(payload.struct, null, 2)
+        } else if (exportErrs.length) {
+          structEl.textContent =
+            '// Card export did not validate. Fix the issues in the red message above, then refresh.\n' +
+            exportErrs
+              .map(function (e) {
+                return '// ' + e.path + ': ' + e.message
+              })
+              .join('\n')
         } else {
           structEl.textContent =
-            '// Select a frame/component-like root with width and height to generate a struct.'
+            '// Select a root container with a visible `front` child. Optional children: `back`, `inside`, `colorOptions`.'
         }
+        renderExportLog(payload)
       }
 
       document.getElementById('scan').onclick = function () {

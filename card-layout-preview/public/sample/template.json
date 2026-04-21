@@ -1,0 +1,30 @@
+{
+  "width": 324,
+  "height": 450,
+  "front": {
+    "images": [
+      {
+        "name": "Photo",
+        "x": 28,
+        "y": 28,
+        "width": 268,
+        "height": 370,
+        "default": "photo.svg"
+      }
+    ],
+    "text": [
+      {
+        "name": "Title",
+        "x": 28,
+        "y": 408,
+        "width": 268,
+        "height": 24,
+        "default": "Happy Birthday",
+        "maxLength": 14,
+        "fontName": "Inter-Bold",
+        "fontSize": 18,
+        "align": "center"
+      }
+    ]
+  }
+}
